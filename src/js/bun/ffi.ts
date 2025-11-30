@@ -156,6 +156,10 @@ Object.defineProperty(globalThis, "__GlobalBunCString", {
   configurable: false,
 });
 
+// Replace native CString function with JS CString class on FFI object
+// so that `new Bun.FFI.CString(ptr)` works as expected
+ffi.CString = CString;
+
 const ffiWrappers = new Array(21);
 
 var char = "val|0";
