@@ -906,6 +906,167 @@ pub const Bunfig = struct {
                             try this.addError(depth.loc, "Expected number");
                         }
                     }
+
+                    if (console_expr.get("level")) |level| {
+                        if (level.asString(allocator)) |level_str| {
+                            const Matcher = strings.ExactSizeMatcher(5);
+                            switch (Matcher.match(level_str)) {
+                                Matcher.case("debug") => {
+                                    this.ctx.runtime_options.console.debug = true;
+                                    this.ctx.runtime_options.console.logs = true;
+                                    this.ctx.runtime_options.console.info = true;
+                                    this.ctx.runtime_options.console.warns = true;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                Matcher.case("log") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = true;
+                                    this.ctx.runtime_options.console.info = true;
+                                    this.ctx.runtime_options.console.warns = true;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                Matcher.case("info") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = true;
+                                    this.ctx.runtime_options.console.warns = true;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                Matcher.case("warn") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = true;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                Matcher.case("error") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                Matcher.case("none") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = false;
+                                },
+                                else => {
+                                    try this.addError(level.loc, "Invalid console level, only 'debug', 'log', 'info', 'warn', 'error', and 'none' are supported");
+                                },
+                            }
+                        } else {
+                            try this.addError(level.loc, "Expected string");
+                        }
+                    }
+
+                    if (console_expr.get("only")) |only| {
+                        if (only.asString(allocator)) |only_str| {
+                            const Matcher = strings.ExactSizeMatcher(5);
+                            switch (Matcher.match(only_str)) {
+                                Matcher.case("debug") => {
+                                    this.ctx.runtime_options.console.debug = true;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = false;
+                                },
+                                Matcher.case("log") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = true;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = false;
+                                },
+                                Matcher.case("info") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = true;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = false;
+                                },
+                                Matcher.case("warn") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = true;
+                                    this.ctx.runtime_options.console.errors = false;
+                                },
+                                Matcher.case("error") => {
+                                    this.ctx.runtime_options.console.debug = false;
+                                    this.ctx.runtime_options.console.logs = false;
+                                    this.ctx.runtime_options.console.info = false;
+                                    this.ctx.runtime_options.console.warns = false;
+                                    this.ctx.runtime_options.console.errors = true;
+                                },
+                                else => {
+                                    try this.addError(only.loc, "Invalid console only level, only 'debug', 'log', 'info', 'warn', and 'error' are supported");
+                                },
+                            }
+                        } else {
+                            try this.addError(only.loc, "Expected string");
+                        }
+                    }
+
+                    if (console_expr.get("time")) |time| {
+                        if (time.asString(allocator)) |s| {
+                            if (strings.eqlComptime(s, "time")) {
+                                this.ctx.runtime_options.console.time = .time;
+                            } else if (strings.eqlComptime(s, "date")) {
+                                this.ctx.runtime_options.console.time = .date;
+                            } else if (strings.eqlComptime(s, "datetime")) {
+                                this.ctx.runtime_options.console.time = .datetime;
+                            } else if (strings.eqlComptime(s, "none")) {
+                                this.ctx.runtime_options.console.time = .none;
+                            } else {
+                                try this.addError(time.loc, "Invalid console time option, only 'time', 'date', 'datetime', and 'none' are supported");
+                            }
+                        } else {
+                            try this.addError(time.loc, "Expected string");
+                        }
+                    }
+
+                    if (console_expr.get("debug")) |debug| {
+                        if (debug.asBool()) |value| {
+                            this.ctx.runtime_options.console.debug = value;
+                        } else {
+                            try this.addError(debug.loc, "Expected boolean");
+                        }
+                    }
+
+                    if (console_expr.get("log")) |log| {
+                        if (log.asBool()) |value| {
+                            this.ctx.runtime_options.console.logs = value;
+                        } else {
+                            try this.addError(log.loc, "Expected boolean");
+                        }
+                    }
+
+                    if (console_expr.get("info")) |info| {
+                        if (info.asBool()) |value| {
+                            this.ctx.runtime_options.console.info = value;
+                        } else {
+                            try this.addError(info.loc, "Expected boolean");
+                        }
+                    }
+
+                    if (console_expr.get("warn")) |warn| {
+                        if (warn.asBool()) |value| {
+                            this.ctx.runtime_options.console.warns = value;
+                        } else {
+                            try this.addError(warn.loc, "Expected boolean");
+                        }
+                    }
+
+                    if (console_expr.get("error")) |errors| {
+                        if (errors.asBool()) |value| {
+                            this.ctx.runtime_options.console.errors = value;
+                        } else {
+                            try this.addError(errors.loc, "Expected boolean");
+                        }
+                    }
                 }
             }
 
