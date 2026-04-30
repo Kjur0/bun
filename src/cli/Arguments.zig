@@ -125,6 +125,21 @@ pub const runtime_params_ = [_]ParamType{
     clap.parseParam("--no-addons                       Throw an error if process.dlopen is called, and disable export condition \"node-addons\"") catch unreachable,
     clap.parseParam("--unhandled-rejections <STR>      One of \"strict\", \"throw\", \"warn\", \"none\", or \"warn-with-error-code\"") catch unreachable,
     clap.parseParam("--console-depth <NUMBER>          Set the default depth for console.log object inspection (default: 2)") catch unreachable,
+    clap.parseParam("--console-level <STR>             One of \"debug\", \"log\", \"info\", \"warn\", \"error\", or \"none\"") catch unreachable,
+    clap.parseParam("--console-only <STR>              Allow only this level logging. One of \"debug\", \"log\", \"info\", \"warn\", or \"error\"") catch unreachable,
+    // clap.parseParam("--console-file <STR>              Write logs to a file instead of stderr/stdout") catch unreachable,
+    clap.parseParam("--console-time <STR>              One of \"time\", \"date\", \"datetime\", or \"none\"") catch unreachable,
+    clap.parseParam("--console-debug                   Allow debug level logging") catch unreachable,
+    clap.parseParam("--console-log                     Allow log level logging") catch unreachable,
+    clap.parseParam("--console-info                    Allow info level logging") catch unreachable,
+    clap.parseParam("--console-warn                    Allow warn level logging") catch unreachable,
+    clap.parseParam("--console-error                   Allow error level logging") catch unreachable,
+    clap.parseParam("--console-none                    Disable all logging") catch unreachable,
+    clap.parseParam("--console-no-debug                Disable debug level logging") catch unreachable,
+    clap.parseParam("--console-no-log                  Disable log level logging") catch unreachable,
+    clap.parseParam("--console-no-info                 Disable info level logging") catch unreachable,
+    clap.parseParam("--console-no-warn                 Disable warn level logging") catch unreachable,
+    clap.parseParam("--console-no-error                Disable error level logging") catch unreachable,
     clap.parseParam("--user-agent <STR>               Set the default User-Agent header for HTTP requests") catch unreachable,
     clap.parseParam("--cron-title <STR>               Title for cron execution mode") catch unreachable,
     clap.parseParam("--cron-period <STR>              Cron period for cron execution mode") catch unreachable,
@@ -891,6 +906,149 @@ pub fn parse(allocator: std.mem.Allocator, ctx: Command.Context, comptime cmd: C
             };
             // Treat depth=0 as maxInt(u16) for infinite depth
             ctx.runtime_options.console_depth = if (depth == 0) std.math.maxInt(u16) else depth;
+        }
+
+        if (args.option("--console-level")) |level_str| {
+            if (bun.strings.eqlComptime(level_str, "debug")) {
+                ctx.runtime_options.console.debug = true;
+                ctx.runtime_options.console.logs = true;
+                ctx.runtime_options.console.info = true;
+                ctx.runtime_options.console.warns = true;
+                ctx.runtime_options.console.errors = true;
+            } else if (bun.strings.eqlComptime(level_str, "log")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = true;
+                ctx.runtime_options.console.info = true;
+                ctx.runtime_options.console.warns = true;
+                ctx.runtime_options.console.errors = true;
+            } else if (bun.strings.eqlComptime(level_str, "info")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = true;
+                ctx.runtime_options.console.warns = true;
+                ctx.runtime_options.console.errors = true;
+            } else if (bun.strings.eqlComptime(level_str, "warn")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = true;
+                ctx.runtime_options.console.errors = true;
+            } else if (bun.strings.eqlComptime(level_str, "error")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = true;
+            } else if (bun.strings.eqlComptime(level_str, "none")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = false;
+            } else {
+                Output.errGeneric("Invalid value for --console-level: \"{s}\". Must be one of \"debug\", \"log\", \"info\", \"warn\", or \"error\"\n", .{level_str});
+                Global.exit(1);
+            }
+        }
+
+        if (args.option("--console-only")) |only_str| {
+            if (bun.strings.eqlComptime(only_str, "debug")) {
+                ctx.runtime_options.console.debug = true;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = false;
+            } else if (bun.strings.eqlComptime(only_str, "log")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = true;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = false;
+            } else if (bun.strings.eqlComptime(only_str, "info")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = true;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = false;
+            } else if (bun.strings.eqlComptime(only_str, "warn")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = true;
+                ctx.runtime_options.console.errors = false;
+            } else if (bun.strings.eqlComptime(only_str, "error")) {
+                ctx.runtime_options.console.debug = false;
+                ctx.runtime_options.console.logs = false;
+                ctx.runtime_options.console.info = false;
+                ctx.runtime_options.console.warns = false;
+                ctx.runtime_options.console.errors = true;
+            } else {
+                Output.errGeneric("Invalid value for --console-only: \"{s}\". Must be one of \"debug\", \"log\", \"info\", \"warn\", or \"error\"\n", .{only_str});
+                Global.exit(1);
+            }
+        }
+
+        if (args.option("--console-time")) |time_str| {
+            if (bun.strings.eqlComptime(time_str, "time")) {
+                ctx.runtime_options.console_time = .time;
+            } else if (bun.strings.eqlComptime(time_str, "date")) {
+                ctx.runtime_options.console_time = .date;
+            } else if (bun.strings.eqlComptime(time_str, "datetime")) {
+                ctx.runtime_options.console_time = .dateTime;
+            } else if (bun.strings.eqlComptime(time_str, "none")) {
+                ctx.runtime_options.console_time = .none;
+            } else {
+                Output.errGeneric("Invalid value for --console-time: \"{s}\". Must be one of \"time\", \"date\", \"datetime\", or \"none\"\n", .{time_str});
+                Global.exit(1);
+            }
+        }
+
+        if (args.flag("--console-debug")) {
+            ctx.runtime_options.console.debug = true;
+        }
+
+        if (args.flag("--console-log")) {
+            ctx.runtime_options.console.logs = true;
+        }
+
+        if (args.flag("--console-info")) {
+            ctx.runtime_options.console.info = true;
+        }
+
+        if (args.flag("--console-warn")) {
+            ctx.runtime_options.console.warns = true;
+        }
+
+        if (args.flag("--console-error")) {
+            ctx.runtime_options.console.errors = true;
+        }
+
+        if (args.flag("--console-none")) {
+            ctx.runtime_options.console.debug = false;
+            ctx.runtime_options.console.logs = false;
+            ctx.runtime_options.console.info = false;
+            ctx.runtime_options.console.warns = false;
+            ctx.runtime_options.console.errors = false;
+        }
+
+        if (args.flag("--console-no-debug")) {
+            ctx.runtime_options.console.debug = false;
+        }
+
+        if (args.flag("--console-no-log")) {
+            ctx.runtime_options.console.logs = false;
+        }
+
+        if (args.flag("--console-no-info")) {
+            ctx.runtime_options.console.info = false;
+        }
+
+        if (args.flag("--console-no-warn")) {
+            ctx.runtime_options.console.warns = false;
+        }
+
+        if (args.flag("--console-no-error")) {
+            ctx.runtime_options.console.errors = false;
         }
 
         if (args.option("--dns-result-order")) |order| {

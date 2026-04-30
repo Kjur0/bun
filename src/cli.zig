@@ -388,6 +388,22 @@ pub const Command = struct {
         reporter_outfile: ?[]const u8 = null,
     };
 
+    pub const TimeLoggerOptions = enum {
+        none,
+        time,
+        datetime,
+        date
+    };
+
+    pub const ConsoleOptions = struct {
+        debug: bool = true,
+        logs: bool = true,
+        info: bool = true,
+        warns: bool = true,
+        errors: bool = true,
+        time: TimeLoggerOptions = TimeLoggerOptions.none,
+    };
+
     pub const Debugger = union(enum) {
         unspecified: void,
         enable: struct {
@@ -399,6 +415,7 @@ pub const Command = struct {
 
     pub const RuntimeOptions = struct {
         smol: bool = false,
+        console: ConsoleOptions = .{},
         debugger: Debugger = .{ .unspecified = {} },
         if_present: bool = false,
         redis_preconnect: bool = false,
