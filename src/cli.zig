@@ -388,12 +388,7 @@ pub const Command = struct {
         reporter_outfile: ?[]const u8 = null,
     };
 
-    pub const TimeLoggerOptions = enum {
-        none,
-        time,
-        datetime,
-        date
-    };
+    pub const TimeLoggerOptions = enum { none, time, dateTime, date };
 
     pub const ConsoleOptions = struct {
         debug: bool = true,
@@ -401,6 +396,7 @@ pub const Command = struct {
         info: bool = true,
         warns: bool = true,
         errors: bool = true,
+        icons: bool = false,
         time: TimeLoggerOptions = TimeLoggerOptions.none,
     };
 

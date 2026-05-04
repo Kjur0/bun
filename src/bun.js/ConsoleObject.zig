@@ -8,6 +8,16 @@ const DEFAULT_CONSOLE_LOG_DEPTH: u16 = 2;
 
 const Counter = std.AutoHashMapUnmanaged(u64, u32);
 
+const GroupKind = enum {
+    Group,
+    GroupCollapsed,
+};
+
+const GroupEntry = struct {
+    kind: GroupKind,
+    label: String = String.empty,
+};
+
 stderr_buffer: [4096]u8,
 stdout_buffer: [4096]u8,
 
@@ -19,6 +29,9 @@ writer: *std.Io.Writer,
 default_indent: u16 = 0,
 
 counts: Counter = .{},
+
+group_stack: std.array_list.Managed(GroupEntry) = undefined,
+group_stack_initialized: bool = false,
 
 pub fn format(_: @This(), comptime _: []const u8, _: anytype, _: anytype) !void {}
 
@@ -74,6 +87,122 @@ var stdout_mutex: bun.Mutex = .{};
 threadlocal var stderr_lock_count: u16 = 0;
 threadlocal var stdout_lock_count: u16 = 0;
 
+fn ensureGroupStackInitialized(this: *ConsoleObject, global: *JSGlobalObject) bun.JSError!void {
+    if (!this.group_stack_initialized) {
+        this.group_stack = std.array_list.Managed(GroupEntry).init(global.allocator());
+        this.group_stack_initialized = true;
+    }
+}
+
+fn pushGroupEntry(this: *ConsoleObject, global: *JSGlobalObject, message_type: MessageType, vals: [*]const JSValue, len: usize) bun.JSError!void {
+    try ensureGroupStackInitialized(this, global);
+
+    var label = String.empty;
+    if (len > 0) {
+        label = try bun.String.fromJS(vals[0], global);
+    }
+
+    errdefer label.deref();
+
+    try this.group_stack.append(.{
+        .kind = if (message_type == .StartGroup) .Group else .GroupCollapsed,
+        .label = label,
+    });
+}
+
+fn popGroupEntry(this: *ConsoleObject) ?GroupEntry {
+    if (!this.group_stack_initialized) return null;
+    if (this.group_stack.items.len == 0) return null;
+    return this.group_stack.pop();
+}
+
+fn peekGroupEntry(this: *ConsoleObject) ?GroupEntry {
+    if (!this.group_stack_initialized) return null;
+    if (this.group_stack.items.len == 0) return null;
+    return this.group_stack.items[this.group_stack.items.len - 1];
+}
+
+fn getIcon(message_type: MessageType, message_level: MessageLevel) []const u8 {
+    return switch (message_type) {
+        .Log => switch (message_level) {
+            .Debug => "◌",
+            .Info => "i",
+            .Log => "•",
+            .Warning => "!",
+            .Error => "✘",
+            else => "⟡",
+        },
+        .Dir => "◈",
+        .DirXML => "◇",
+        .Table => "▦",
+        .Trace => "↳",
+        .StartGroup => "▾",
+        .StartGroupCollapsed => "▸",
+        .EndGroup => "▁",
+        .Assert => "⁉",
+        .Timing => "⧗",
+        .Profile => "⧖",
+        .ProfileEnd => "⧖",
+        .Image => "◻",
+        // .Count => "#",
+        else => "⟡",
+    };
+}
+
+fn getIconColor(message_type: MessageType, message_level: MessageLevel) []const u8 {
+    return switch (message_type) {
+        .Log => switch (message_level) {
+            .Debug => comptime Output.prettyFmt("<r><icyan>", true),
+            .Info => comptime Output.prettyFmt("<r><iblue>", true),
+            .Log => comptime Output.prettyFmt("<r>", true),
+            .Warning => comptime Output.prettyFmt("<r><iyellow>", true),
+            .Error => comptime Output.prettyFmt("<r><ired>", true),
+            else => comptime Output.prettyFmt("<r>", true),
+        },
+        .Dir => comptime Output.prettyFmt("<r>", true),
+        .DirXML => comptime Output.prettyFmt("<r>", true),
+        .Table => comptime Output.prettyFmt("<r>", true),
+        .Trace => comptime Output.prettyFmt("<r><imagenta>", true),
+        .StartGroup => comptime Output.prettyFmt("<r><iyellow>", true),
+        .StartGroupCollapsed => comptime Output.prettyFmt("<r><iyellow>", true),
+        .EndGroup => comptime Output.prettyFmt("<r><iyellow>", true),
+        .Assert => comptime Output.prettyFmt("<r><ired>", true),
+        .Timing => comptime Output.prettyFmt("<r>", true),
+        .Profile => comptime Output.prettyFmt("<r><imagenta>", true),
+        .ProfileEnd => comptime Output.prettyFmt("<r><imagenta>", true),
+        .Image => comptime Output.prettyFmt("<r>", true),
+        // .Count => comptime Output.prettyFmt("<r><igreen>", true),
+        else => comptime Output.prettyFmt("<r>", true),
+    };
+}
+
+fn getColor(message_type: MessageType, message_level: MessageLevel) []const u8 {
+    return switch (message_type) {
+        .Log => switch (message_level) {
+            .Debug => comptime Output.prettyFmt("<r><cyan>", true),
+            .Info => comptime Output.prettyFmt("<r><blue>", true),
+            .Log => comptime Output.prettyFmt("<r>", true),
+            .Warning => comptime Output.prettyFmt("<r><yellow>", true),
+            .Error => comptime Output.prettyFmt("<r><red>", true),
+            else => comptime Output.prettyFmt("<r>", true),
+        },
+        .Dir => comptime Output.prettyFmt("<r>", true),
+        .DirXML => comptime Output.prettyFmt("<r>", true),
+        .Table => comptime Output.prettyFmt("<r>", true),
+        .Trace => comptime Output.prettyFmt("<r><magenta>", true),
+        .StartGroup => comptime Output.prettyFmt("<r><yellow>", true),
+        .StartGroupCollapsed => comptime Output.prettyFmt("<r><yellow>", true),
+        .EndGroup => comptime Output.prettyFmt("<r><yellow>", true),
+        .Assert => comptime Output.prettyFmt("<r><red>", true),
+        .Timing => comptime Output.prettyFmt("<r>", true),
+        .Profile => comptime Output.prettyFmt("<r><magenta>", true),
+        .ProfileEnd => comptime Output.prettyFmt("<r><magenta>", true),
+        .Image => comptime Output.prettyFmt("<r>", true),
+        // .Count => comptime Output.prettyFmt("<r><green>", true),
+        else => comptime Output.prettyFmt("<r>", true),
+    };
+}
+
 /// https://console.spec.whatwg.org/#formatter
 pub fn messageWithTypeAndLevel(
     ctype: *ConsoleObject,
@@ -97,15 +226,38 @@ fn messageWithTypeAndLevel_(
     len: usize,
 ) bun.JSError!void {
     var console = global.bunVM().console;
+    const cli_context = CLI.get();
     defer console.default_indent +|= @as(u16, @intFromBool(message_type == .StartGroup));
 
-    if (message_type == .StartGroup and len == 0) {
-        // undefined is printed if passed explicitly.
-        return;
+    if (message_type == .StartGroup or message_type == .StartGroupCollapsed) {
+        try pushGroupEntry(console, global, message_type, vals, len);
+        if (!cli_context.runtime_options.console.icons and len == 0)
+            return;
     }
 
     if (message_type == .EndGroup) {
-        console.default_indent -|= 1;
+        if (peekGroupEntry(console).?.kind == .Group)
+            console.default_indent -|= 1;
+        if (!cli_context.runtime_options.console.icons) {
+            popGroupEntry(console).?.label.deref();
+            return;
+        }
+    }
+
+    if (message_type == .Clear) {
+        Output.resetTerminal();
+        return;
+    }
+
+    if (level == .Log and !cli_context.runtime_options.console.logs) {
+        return;
+    } else if (level == .Warning and !cli_context.runtime_options.console.warns) {
+        return;
+    } else if (level == .Error and !cli_context.runtime_options.console.errors) {
+        return;
+    } else if (level == .Info and !cli_context.runtime_options.console.info) {
+        return;
+    } else if (level == .Debug and !cli_context.runtime_options.console.debug) {
         return;
     }
 
@@ -141,11 +293,6 @@ fn messageWithTypeAndLevel_(
         }
     }
 
-    if (message_type == .Clear) {
-        Output.resetTerminal();
-        return;
-    }
-
     if (message_type == .Assert and len == 0) {
         const text = if (Output.enable_ansi_colors_stderr)
             Output.prettyFmt("<r><red>Assertion failed<r>\n", true)
@@ -173,11 +320,11 @@ fn messageWithTypeAndLevel_(
 
     var print_length = len;
     // Get console depth from CLI options or bunfig, fallback to default
-    const cli_context = CLI.get();
     const console_depth = cli_context.runtime_options.console_depth orelse DEFAULT_CONSOLE_LOG_DEPTH;
 
     var print_options: FormatOptions = .{
         .enable_colors = enable_colors,
+        .enable_icons = cli_context.runtime_options.console.icons,
         .add_newline = true,
         .flush = true,
         .default_indent = console.default_indent,
@@ -187,6 +334,7 @@ fn messageWithTypeAndLevel_(
             else => .normal,
             .Warning => .warn,
         },
+        .message_type = message_type,
     };
 
     if (message_type == .Table and len >= 1) {
@@ -225,6 +373,23 @@ fn messageWithTypeAndLevel_(
                     print_options.enable_colors = colors_prop.toBoolean();
             }
         }
+    }
+
+    if ((message_type == .StartGroup or message_type == .StartGroupCollapsed) and len == 0) {
+        // undefined is printed if passed explicitly.
+        const empty_label = ZigString.init("").toJS(global);
+        try format2(level, global, &[_]JSValue{empty_label}, 1, writer, print_options);
+        return;
+    }
+
+    if (message_type == .EndGroup) {
+        const popped = popGroupEntry(console);
+        if (popped) |entry| {
+            defer entry.label.deref();
+            const label = try entry.label.toJS(global);
+            try format2(level, global, &[_]JSValue{label}, 1, writer, print_options);
+        }
+        return;
     }
 
     if (print_length > 0)
@@ -708,6 +873,7 @@ pub fn writeTrace(comptime Writer: type, writer: Writer, global: *JSGlobalObject
 
 pub const FormatOptions = struct {
     enable_colors: bool,
+    enable_icons: bool = false,
     add_newline: bool,
     flush: bool,
     ordered_properties: bool = false,
@@ -716,6 +882,7 @@ pub const FormatOptions = struct {
     single_line: bool = false,
     default_indent: u16 = 0,
     error_display_level: ErrorDisplayLevel = .full,
+    message_type: MessageType = .Log,
     pub const ErrorDisplayLevel = enum {
         normal,
         warn,
@@ -850,11 +1017,18 @@ pub fn format2(
         const tag = try ConsoleObject.Formatter.Tag.get(vals[0], global);
         fmt.writeIndent(*std.Io.Writer, writer) catch return;
 
+        if (options.enable_icons) {
+            const icon = getIcon(options.message_type, level);
+            if (options.enable_colors) {
+                writer.writeAll(getIconColor(options.message_type, level)) catch {};
+            }
+            writer.writeAll(icon) catch {};
+            writer.writeAll(" ") catch {};
+        }
+
         if (tag.tag == .String) {
             if (options.enable_colors) {
-                if (level == .Error) {
-                    writer.writeAll(comptime Output.prettyFmt("<r><red>", true)) catch {};
-                }
+                writer.writeAll(getColor(options.message_type, level)) catch {};
                 try fmt.format(
                     tag,
                     *std.Io.Writer,
@@ -863,9 +1037,7 @@ pub fn format2(
                     global,
                     true,
                 );
-                if (level == .Error) {
-                    writer.writeAll(comptime Output.prettyFmt("<r>", true)) catch {};
-                }
+                writer.writeAll(comptime Output.prettyFmt("<r>", true)) catch {};
             } else {
                 try fmt.format(
                     tag,
@@ -885,6 +1057,8 @@ pub fn format2(
             defer {
                 if (options.flush) writer.flush() catch {};
             }
+            if (options.enable_icons and (options.message_type == .Dir or options.message_type == .DirXML))
+                fmt.indent += 1;
             if (options.enable_colors) {
                 try fmt.format(
                     tag,
@@ -904,6 +1078,8 @@ pub fn format2(
                     false,
                 );
             }
+            if (options.enable_icons and (options.message_type == .Dir or options.message_type == .DirXML))
+                fmt.indent -= 1;
             if (options.add_newline) _ = writer.write("\n") catch 0;
         }
 
@@ -931,6 +1107,12 @@ pub fn format2(
     var tag: ConsoleObject.Formatter.Tag.Result = undefined;
 
     fmt.writeIndent(*std.Io.Writer, writer) catch return;
+
+    if (options.enable_icons) {
+        const icon = getIcon(options.message_type, level);
+        writer.writeAll(icon) catch {};
+        writer.writeAll(" ") catch {};
+    }
 
     var any = false;
     if (options.enable_colors) {

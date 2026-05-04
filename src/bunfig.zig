@@ -909,7 +909,7 @@ pub const Bunfig = struct {
 
                     if (console_expr.get("level")) |level| {
                         if (level.asString(allocator)) |level_str| {
-                            const Matcher = strings.ExactSizeMatcher(5);
+                            const Matcher = strings.ExactSizeMatcher(8);
                             switch (Matcher.match(level_str)) {
                                 Matcher.case("debug") => {
                                     this.ctx.runtime_options.console.debug = true;
@@ -964,7 +964,7 @@ pub const Bunfig = struct {
 
                     if (console_expr.get("only")) |only| {
                         if (only.asString(allocator)) |only_str| {
-                            const Matcher = strings.ExactSizeMatcher(5);
+                            const Matcher = strings.ExactSizeMatcher(8);
                             switch (Matcher.match(only_str)) {
                                 Matcher.case("debug") => {
                                     this.ctx.runtime_options.console.debug = true;
@@ -1017,7 +1017,7 @@ pub const Bunfig = struct {
                             } else if (strings.eqlComptime(s, "date")) {
                                 this.ctx.runtime_options.console.time = .date;
                             } else if (strings.eqlComptime(s, "datetime")) {
-                                this.ctx.runtime_options.console.time = .datetime;
+                                this.ctx.runtime_options.console.time = .dateTime;
                             } else if (strings.eqlComptime(s, "none")) {
                                 this.ctx.runtime_options.console.time = .none;
                             } else {
@@ -1065,6 +1065,14 @@ pub const Bunfig = struct {
                             this.ctx.runtime_options.console.errors = value;
                         } else {
                             try this.addError(errors.loc, "Expected boolean");
+                        }
+                    }
+
+                    if (console_expr.get("icons")) |icons| {
+                        if (icons.asBool()) |value| {
+                            this.ctx.runtime_options.console.icons = value;
+                        } else {
+                            try this.addError(icons.loc, "Expected boolean");
                         }
                     }
                 }

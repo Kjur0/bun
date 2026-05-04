@@ -140,6 +140,8 @@ pub const runtime_params_ = [_]ParamType{
     clap.parseParam("--console-no-info                 Disable info level logging") catch unreachable,
     clap.parseParam("--console-no-warn                 Disable warn level logging") catch unreachable,
     clap.parseParam("--console-no-error                Disable error level logging") catch unreachable,
+    clap.parseParam("--console-icons                   Enable icons in console output") catch unreachable,
+    clap.parseParam("--no-console-icons                Disable icons in console output") catch unreachable,
     clap.parseParam("--user-agent <STR>               Set the default User-Agent header for HTTP requests") catch unreachable,
     clap.parseParam("--cron-title <STR>               Title for cron execution mode") catch unreachable,
     clap.parseParam("--cron-period <STR>              Cron period for cron execution mode") catch unreachable,
@@ -908,7 +910,13 @@ pub fn parse(allocator: std.mem.Allocator, ctx: Command.Context, comptime cmd: C
             ctx.runtime_options.console_depth = if (depth == 0) std.math.maxInt(u16) else depth;
         }
 
-        if (args.option("--console-level")) |level_str| {
+        const level_opt = args.option("--console-level");
+        const only_opt = args.option("--console-only");
+
+        if (level_opt != null and only_opt != null) {
+            Output.errGeneric("Cannot specify both --console-level and --console-only", .{});
+            Global.exit(1);
+        } else if (level_opt) |level_str| {
             if (bun.strings.eqlComptime(level_str, "debug")) {
                 ctx.runtime_options.console.debug = true;
                 ctx.runtime_options.console.logs = true;
@@ -949,9 +957,7 @@ pub fn parse(allocator: std.mem.Allocator, ctx: Command.Context, comptime cmd: C
                 Output.errGeneric("Invalid value for --console-level: \"{s}\". Must be one of \"debug\", \"log\", \"info\", \"warn\", or \"error\"\n", .{level_str});
                 Global.exit(1);
             }
-        }
-
-        if (args.option("--console-only")) |only_str| {
+        } else if (only_opt) |only_str| {
             if (bun.strings.eqlComptime(only_str, "debug")) {
                 ctx.runtime_options.console.debug = true;
                 ctx.runtime_options.console.logs = false;
@@ -990,39 +996,23 @@ pub fn parse(allocator: std.mem.Allocator, ctx: Command.Context, comptime cmd: C
 
         if (args.option("--console-time")) |time_str| {
             if (bun.strings.eqlComptime(time_str, "time")) {
-                ctx.runtime_options.console_time = .time;
+                ctx.runtime_options.console.time = .time;
             } else if (bun.strings.eqlComptime(time_str, "date")) {
-                ctx.runtime_options.console_time = .date;
+                ctx.runtime_options.console.time = .date;
             } else if (bun.strings.eqlComptime(time_str, "datetime")) {
-                ctx.runtime_options.console_time = .dateTime;
+                ctx.runtime_options.console.time = .dateTime;
             } else if (bun.strings.eqlComptime(time_str, "none")) {
-                ctx.runtime_options.console_time = .none;
+                ctx.runtime_options.console.time = .none;
             } else {
                 Output.errGeneric("Invalid value for --console-time: \"{s}\". Must be one of \"time\", \"date\", \"datetime\", or \"none\"\n", .{time_str});
                 Global.exit(1);
             }
         }
 
-        if (args.flag("--console-debug")) {
-            ctx.runtime_options.console.debug = true;
+        if (args.flag("--console-none") and (args.flag("--console-debug") or args.flag("--console-log") or args.flag("--console-info") or args.flag("--console-warn") or args.flag("--console-error") or args.option("--console-only") != null or args.option("--console-level") != null)) {
+            Output.errGeneric("Cannot specify --console-none with any of --console-debug, --console-log, --console-info, --console-warn, --console-error, --console-only, or --console-level", .{});
+            Global.exit(1);
         }
-
-        if (args.flag("--console-log")) {
-            ctx.runtime_options.console.logs = true;
-        }
-
-        if (args.flag("--console-info")) {
-            ctx.runtime_options.console.info = true;
-        }
-
-        if (args.flag("--console-warn")) {
-            ctx.runtime_options.console.warns = true;
-        }
-
-        if (args.flag("--console-error")) {
-            ctx.runtime_options.console.errors = true;
-        }
-
         if (args.flag("--console-none")) {
             ctx.runtime_options.console.debug = false;
             ctx.runtime_options.console.logs = false;
@@ -1031,24 +1021,58 @@ pub fn parse(allocator: std.mem.Allocator, ctx: Command.Context, comptime cmd: C
             ctx.runtime_options.console.errors = false;
         }
 
-        if (args.flag("--console-no-debug")) {
+        if (args.flag("--console-debug") and args.flag("--console-no-debug")) {
+            Output.errGeneric("Cannot specify both --console-debug and --console-no-debug", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-debug")) {
+            ctx.runtime_options.console.debug = true;
+        } else if (args.flag("--console-no-debug")) {
             ctx.runtime_options.console.debug = false;
         }
 
-        if (args.flag("--console-no-log")) {
+        if (args.flag("--console-log") and args.flag("--console-no-log")) {
+            Output.errGeneric("Cannot specify both --console-log and --console-no-log", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-log")) {
+            ctx.runtime_options.console.logs = true;
+        } else if (args.flag("--console-no-log")) {
             ctx.runtime_options.console.logs = false;
         }
 
-        if (args.flag("--console-no-info")) {
+        if (args.flag("--console-info") and args.flag("--console-no-info")) {
+            Output.errGeneric("Cannot specify both --console-info and --console-no-info", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-info")) {
+            ctx.runtime_options.console.info = true;
+        } else if (args.flag("--console-no-info")) {
             ctx.runtime_options.console.info = false;
         }
 
-        if (args.flag("--console-no-warn")) {
+        if (args.flag("--console-warn") and args.flag("--console-no-warn")) {
+            Output.errGeneric("Cannot specify both --console-warn and --console-no-warn", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-warn")) {
+            ctx.runtime_options.console.warns = true;
+        } else if (args.flag("--console-no-warn")) {
             ctx.runtime_options.console.warns = false;
         }
 
-        if (args.flag("--console-no-error")) {
+        if (args.flag("--console-error") and args.flag("--console-no-error")) {
+            Output.errGeneric("Cannot specify both --console-error and --console-no-error", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-error")) {
+            ctx.runtime_options.console.errors = true;
+        } else if (args.flag("--console-no-error")) {
             ctx.runtime_options.console.errors = false;
+        }
+
+        if (args.flag("--console-icons") and args.flag("--no-console-icons")) {
+            Output.errGeneric("Cannot specify both --console-icons and --no-console-icons", .{});
+            Global.exit(1);
+        } else if (args.flag("--console-icons")) {
+            ctx.runtime_options.console.icons = true;
+        } else if (args.flag("--no-console-icons")) {
+            ctx.runtime_options.console.icons = false;
         }
 
         if (args.option("--dns-result-order")) |order| {
