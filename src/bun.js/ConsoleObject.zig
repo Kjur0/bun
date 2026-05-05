@@ -15,7 +15,7 @@ const GroupKind = enum {
 
 const GroupEntry = struct {
     kind: GroupKind,
-    label: String = String.empty,
+    label: JSValue,
 };
 
 stderr_buffer: [4096]u8,
@@ -97,12 +97,10 @@ fn ensureGroupStackInitialized(this: *ConsoleObject, global: *JSGlobalObject) bu
 fn pushGroupEntry(this: *ConsoleObject, global: *JSGlobalObject, message_type: MessageType, vals: [*]const JSValue, len: usize) bun.JSError!void {
     try ensureGroupStackInitialized(this, global);
 
-    var label = String.empty;
+    var label = JSValue.jsEmptyString(global);
     if (len > 0) {
-        label = try bun.String.fromJS(vals[0], global);
+        label = vals[0];
     }
-
-    errdefer label.deref();
 
     try this.group_stack.append(.{
         .kind = if (message_type == .StartGroup) .Group else .GroupCollapsed,
@@ -239,7 +237,7 @@ fn messageWithTypeAndLevel_(
         if (peekGroupEntry(console).?.kind == .Group)
             console.default_indent -|= 1;
         if (!cli_context.runtime_options.console.icons) {
-            popGroupEntry(console).?.label.deref();
+            _ = popGroupEntry(console);
             return;
         }
     }
@@ -293,16 +291,6 @@ fn messageWithTypeAndLevel_(
         }
     }
 
-    if (message_type == .Assert and len == 0) {
-        const text = if (Output.enable_ansi_colors_stderr)
-            Output.prettyFmt("<r><red>Assertion failed<r>\n", true)
-        else
-            "Assertion failed\n";
-        console.error_writer.writeAll(text) catch {};
-        console.error_writer.flush() catch {};
-        return;
-    }
-
     const enable_colors = if (level == .Warning or level == .Error)
         Output.enable_ansi_colors_stderr
     else
@@ -336,6 +324,12 @@ fn messageWithTypeAndLevel_(
         },
         .message_type = message_type,
     };
+
+    if (message_type == .Assert and len == 0) {
+        const val = ZigString.init("Assertion failed").toJS(global);
+        try format2(level, global, &[_]JSValue{val}, 1, writer, print_options);
+        return;
+    }
 
     if (message_type == .Table and len >= 1) {
         // if value is not an object/array/iterable, don't print a table and just print it
@@ -377,16 +371,15 @@ fn messageWithTypeAndLevel_(
 
     if ((message_type == .StartGroup or message_type == .StartGroupCollapsed) and len == 0) {
         // undefined is printed if passed explicitly.
-        const empty_label = ZigString.init("").toJS(global);
-        try format2(level, global, &[_]JSValue{empty_label}, 1, writer, print_options);
+        const label = peekGroupEntry(console).?.label;
+        try format2(level, global, &[_]JSValue{label}, 1, writer, print_options);
         return;
     }
 
     if (message_type == .EndGroup) {
         const popped = popGroupEntry(console);
         if (popped) |entry| {
-            defer entry.label.deref();
-            const label = try entry.label.toJS(global);
+            const label = entry.label;
             try format2(level, global, &[_]JSValue{label}, 1, writer, print_options);
         }
         return;
@@ -1110,15 +1103,16 @@ pub fn format2(
 
     if (options.enable_icons) {
         const icon = getIcon(options.message_type, level);
+        if (options.enable_colors) {
+            writer.writeAll(getIconColor(options.message_type, level)) catch {};
+        }
         writer.writeAll(icon) catch {};
         writer.writeAll(" ") catch {};
     }
 
     var any = false;
     if (options.enable_colors) {
-        if (level == .Error) {
-            writer.writeAll(comptime Output.prettyFmt("<r><red>", true)) catch {};
-        }
+        writer.writeAll(getColor(options.message_type, level)) catch {};
         while (true) {
             if (any) {
                 _ = writer.write(" ") catch 0;
@@ -1138,9 +1132,7 @@ pub fn format2(
             this_value = fmt.remaining_values[0];
             fmt.remaining_values = fmt.remaining_values[1..];
         }
-        if (level == .Error) {
-            writer.writeAll(comptime Output.prettyFmt("<r>", true)) catch {};
-        }
+        writer.writeAll(comptime Output.prettyFmt("<r>", true)) catch {};
     } else {
         while (true) {
             if (any) {
